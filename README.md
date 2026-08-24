@@ -5,8 +5,9 @@ secuencias de microscopía de nemáticos activos. Esta adaptación parte de
 [`tranngocphu/opticalflow-activenematics`](https://github.com/tranngocphu/opticalflow-activenematics),
 que aplica una arquitectura RAFT entrenada para este tipo de imágenes.
 
-> Estado: infraestructura inicial validada con el ejemplo de referencia en el
-> clúster `swift`. Consulta la [bitácora](docs/BITACORA.md).
+> Estado: infraestructura validada en `swift` con el ejemplo de referencia y
+> con un piloto real de 12 pares de `Bulk_1_12_11`. Consulta la
+> [bitácora](docs/BITACORA.md).
 
 ## Qué produce
 
@@ -63,6 +64,21 @@ nix-shell shell.nix --run "bash cluster/setup_env.sh"
 
 Sustituye `0.108` y `2.0` por la calibración real del microscopio y la adquisición.
 
+Para una secuencia numerada, el modelo se carga una sola vez y se reutiliza:
+
+```bash
+.venv/bin/python scripts/analyze_sequence.py \
+  --input-dir data/Bulk_1_12_11/raw_pilot_frames \
+  --output-dir results/Bulk_1_12_11/raw_pilot \
+  --pairs 1-12 \
+  --delta-t-s 0.5 \
+  --device cuda
+```
+
+El resultado incluye un NPZ y un overlay por par, además de `summary.csv` y
+`metadata.json`. `scripts/compare_raft_pivlab.py` permite después construir
+paneles RAFT/PIVlab y calcular correlaciones sobre la malla de PIVlab.
+
 ## Estructura
 
 ```text
@@ -71,7 +87,7 @@ docs/                    Método, guía del clúster y bitácora
 example/                 Dos frames y resultado originales de referencia
 models/weights.pth       Pesos publicados por el proyecto original
 RAFT/                    Implementación RAFT incluida por el proyecto original
-scripts/analyze_pair.py  Interfaz reproducible para una pareja de frames
+scripts/                 Análisis por pareja/secuencia y comparación con PIVlab
 shell.nix                Entorno Linux/Nix con PyTorch CUDA
 data/                    Datos propios locales (ignorados por Git)
 results/                 Resultados generados (ignorados por Git)

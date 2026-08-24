@@ -69,6 +69,67 @@ documentan la puesta a punto (ruta de spool de Slurm, dependencia Nix excesiva,
 Incorporar una pareja real con sus metadatos de adquisición y ejecutar controles
 sintéticos, de muestra inmóvil y de escala de entrada.
 
+## 2026-08-24 — Piloto sobre `Bulk_1_12_11`
+
+### Objetivo y datos
+
+- Se procesaron los pares 1→2 hasta 12→13 de la secuencia cruda
+  `Bulk_1_12_11/ImageSequence` alojada en `ACTNEM`.
+- La secuencia completa contiene 7200 TIFF `uint16` de 1120 × 1578 px y ocupa
+  aproximadamente 23.9 GiB.
+- Los 13 TIFF usados se copiaron al proyecto y el directorio original se trató
+  como solo lectura.
+- Se inspeccionaron las referencias existentes `PIVlab/PIVlab.mat` y
+  `PIVlab2/PIVlab.mat`; ambas contienen 7199 campos, uno por par consecutivo.
+
+### Implementación
+
+- Se corrigió la carga de TIFF de 16 bits: ahora los enteros se normalizan por
+  el máximo de su tipo (`65535` para `uint16`) antes de convertirlos a RGB.
+  La conversión anterior mediante Pillow podía saturar la imagen.
+- Se añadió `scripts/analyze_sequence.py`, que carga RAFT una sola vez, procesa
+  un intervalo de pares y guarda campos NPZ, overlays, CSV y metadatos.
+- Se añadió `scripts/compare_raft_pivlab.py` para interpolar RAFT sobre las
+  mallas de PIVlab, calcular acuerdo y producir paneles con escala vectorial
+  común.
+
+### Corrida GPU
+
+- Commit ejecutado: `9f5730c3300f58f6897deda1ea5f87cdfe8a58ea`.
+- Job Slurm `1035138`, `node5`, NVIDIA RTX A6000; estado `COMPLETED`.
+- Parámetros: 24 iteraciones RAFT, escala de entrada `upstream`, paso de flechas
+  24 px e intervalo temporal provisional de 0.5 s (2 fps).
+- Tiempo de pared del job: 36 s. Procesamiento de los 12 pares, incluyendo
+  escritura de campos y figuras: 24.25 s.
+- Inferencia: 0.661 s para el primer par y 0.358–0.369 s por par después del
+  calentamiento. Memoria GPU máxima registrada: 5.89 GiB.
+- Rapidez media RAFT: 4.89–5.26 px/frame, equivalente a 9.78–10.53 px/s si el
+  intervalo es realmente 0.5 s. Falta la calibración espacial para convertir
+  estas cantidades a unidades físicas.
+
+### Inspección y comparación con PIVlab
+
+- Se generaron 12 overlays RAFT y 12 comparaciones de tres paneles sobre el
+  mismo fondo: RAFT, PIVlab y PIVlab2.
+- La inspección visual muestra campos suaves y coherentes; los remolinos y las
+  direcciones principales persisten a lo largo de los 12 pares.
+- Frente a `PIVlab`, el promedio de los 12 pares es: correlación de componentes
+  `corr(u)=0.938`, `corr(v)=0.945` y coseno direccional medio `0.911`.
+- Frente a `PIVlab2`: `corr(u)=0.877`, `corr(v)=0.895` y coseno direccional
+  medio `0.867`.
+- RAFT estima una magnitud mayor: 5.04 px/frame en promedio, frente a 3.67 para
+  PIVlab y 2.80 para PIVlab2. Esto no debe interpretarse todavía como que uno de
+  los métodos es correcto: usan estimadores, regularización y escalas espaciales
+  diferentes.
+
+### Decisiones y próximo paso
+
+- El piloto confirma que el flujo funciona con los TIFF reales de 16 bits y que
+  la geometría obtenida concuerda razonablemente con PIVlab.
+- El siguiente control será repetir exactamente los mismos 12 pares y parámetros
+  sobre `ImageSequence_divide_background_median`, y comparar crudo contra fondo
+  dividido sin cambiar simultáneamente otras variables.
+
 ## Plantilla para nuevas entradas
 
 ```text

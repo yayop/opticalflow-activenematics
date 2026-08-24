@@ -222,6 +222,23 @@ sintéticos, de muestra inmóvil y de escala de entrada.
 - Antes de iniciar los 7199 pares se hará una prueba técnica corta del nuevo
   formato, del verificador y del ciclo de limpieza.
 
+## 2026-08-25 — Corrección de cuota durante la campaña completa
+
+- Los tres primeros lotes terminaron y se verificaron: pares 1–4515, 4515
+  campos densos y 26.05 GiB locales.
+- El job `1039265` del cuarto lote falló después de escribir 1395 campos. El
+  filesystem global conservaba espacio, pero la combinación aproximada de
+  5 GiB de imágenes, 8 GiB de salida parcial y el proyecto excedió la cuota
+  efectiva de la cuenta.
+- Se confirmó que no había job óptico activo y se eliminaron únicamente la
+  entrada y salida temporales del lote fallido en `swift` (~13 GiB), además del
+  staging local reproducible (~5 GiB). Los originales de `ACTNEM`, los logs y
+  todos los lotes verificados se conservaron.
+- El controlador admite ahora `-StartPair`/`-EndPair`, reintenta lecturas
+  transitorias de `ACTNEM` y usa 1 GiB como máximo predeterminado. Para los pares
+  4516–7199 quedan nueve lotes de 0.946–0.999 GiB, con un pico remoto previsto
+  muy inferior.
+
 ## Plantilla para nuevas entradas
 
 ```text

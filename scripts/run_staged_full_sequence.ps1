@@ -5,9 +5,11 @@ param(
     [string]$PythonFramePattern = 'Frame_{index:04d}.tif',
     [string]$RunName = 'raw_full_dense_f16',
     [int]$ExpectedFrameCount = 7200,
+    [int]$StartPair = 1,
+    [int]$EndPair = 7199,
     [int]$FrameHeight = 1578,
     [int]$FrameWidth = 1120,
-    [double]$MaxStageGiB = 5.0,
+    [double]$MaxStageGiB = 1.0,
     [ValidateSet('float16', 'float32')]
     [string]$FlowDtype = 'float16',
     [string]$SshTarget = 'swift',
@@ -107,6 +109,22 @@ function Test-DownloadedBatch {
     return $LASTEXITCODE -eq 0
 }
 
+function Copy-FrameWithRetry {
+    param([string]$Source, [string]$Destination, [int]$Attempts = 4)
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        try {
+            Copy-Item -LiteralPath $Source -Destination $Destination
+            return
+        } catch {
+            if ($attempt -eq $Attempts) {
+                throw
+            }
+            Write-Warning "Frame copy failed (attempt $attempt/$Attempts): $Source"
+            Start-Sleep -Seconds (2 * $attempt)
+        }
+    }
+}
+
 if (-not (Test-Path -LiteralPath $SourceDir -PathType Container)) {
     throw "Source directory does not exist: $SourceDir"
 }
@@ -118,6 +136,9 @@ $sourceFiles = @(Get-ChildItem -LiteralPath $SourceDir -File -Filter '*.tif' | S
 if ($sourceFiles.Count -ne $ExpectedFrameCount) {
     throw "Expected $ExpectedFrameCount TIFF files, found $($sourceFiles.Count)."
 }
+if ($StartPair -lt 1 -or $EndPair -ge $sourceFiles.Count -or $EndPair -lt $StartPair) {
+    throw "Invalid requested pair range: $StartPair-$EndPair"
+}
 for ($index = 1; $index -le $sourceFiles.Count; $index++) {
     $expectedName = $FrameTemplate -f $index
     if ($sourceFiles[$index - 1].Name -cne $expectedName) {
@@ -127,11 +148,12 @@ for ($index = 1; $index -le $sourceFiles.Count; $index++) {
 
 $maxStageBytes = [int64]($MaxStageGiB * 1GB)
 $batches = [Collections.Generic.List[object]]::new()
-$frameStart = 1
-while ($frameStart -lt $sourceFiles.Count) {
+$frameStart = $StartPair
+$lastFrame = $EndPair + 1
+while ($frameStart -lt $lastFrame) {
     $frameEnd = $frameStart
     $stageBytes = [int64]$sourceFiles[$frameStart - 1].Length
-    while ($frameEnd -lt $sourceFiles.Count) {
+    while ($frameEnd -lt $lastFrame) {
         $nextBytes = [int64]$sourceFiles[$frameEnd].Length
         if ($stageBytes + $nextBytes -gt $maxStageBytes) {
             break
@@ -157,7 +179,7 @@ while ($frameStart -lt $sourceFiles.Count) {
 }
 
 $estimatedMiBPerPair = if ($FlowDtype -eq 'float16') { 6.2 } else { 13.0 }
-$totalPairCount = $sourceFiles.Count - 1
+$totalPairCount = $EndPair - $StartPair + 1
 $verifiedPairs = 0
 foreach ($batch in $batches) {
     $reportPath = Join-Path (Join-Path $destinationRoot $batch.Name) 'verification.json'
@@ -241,7 +263,7 @@ foreach ($batch in $batches) {
         New-Item -ItemType Directory -Path $localStage | Out-Null
         Write-Host "Staging $($batch.Name) locally..."
         for ($index = $batch.FrameStart; $index -le $batch.FrameEnd; $index++) {
-            Copy-Item -LiteralPath $sourceFiles[$index - 1].FullName -Destination $localStage
+            Copy-FrameWithRetry $sourceFiles[$index - 1].FullName $localStage
         }
 
         Invoke-SshText "rm -rf -- '$remoteBatchInput' '$remoteBatchOutput'; mkdir -p '$remoteInputRoot' '$remoteOutputRoot'" | Out-Null
@@ -293,18 +315,28 @@ foreach ($batch in $batches) {
     Write-Host "Completed and cleaned $($batch.Name)."
 }
 
-$allRows = foreach ($batch in $batches) {
-    Import-Csv -LiteralPath (Join-Path (Join-Path $destinationRoot $batch.Name) 'summary.csv')
+$verifiedBatchDirs = @(Get-ChildItem -LiteralPath $destinationRoot -Directory -Filter 'batch_*' | Where-Object {
+    Test-Path -LiteralPath (Join-Path $_.FullName 'verification.json')
+})
+$allRows = foreach ($batchDir in $verifiedBatchDirs) {
+    Import-Csv -LiteralPath (Join-Path $batchDir.FullName 'summary.csv')
 }
 $allRows | Sort-Object pair | Export-Csv -LiteralPath (Join-Path $destinationRoot 'summary.csv') -NoTypeInformation
-$verificationReports = foreach ($batch in $batches) {
-    Get-Content -LiteralPath (Join-Path (Join-Path $destinationRoot $batch.Name) 'verification.json') -Raw | ConvertFrom-Json
-}
+$verificationReports = @($verifiedBatchDirs | ForEach-Object {
+    Get-Content -LiteralPath (Join-Path $_.FullName 'verification.json') -Raw | ConvertFrom-Json
+} | Sort-Object pair_start)
+$coveredPairs = @($verificationReports | ForEach-Object { $_.pair_start..$_.pair_end })
+$completeSequence = $coveredPairs.Count -eq ($sourceFiles.Count - 1) -and `
+    $coveredPairs[0] -eq 1 -and $coveredPairs[-1] -eq ($sourceFiles.Count - 1) -and `
+    (@($coveredPairs | Sort-Object -Unique).Count -eq $coveredPairs.Count)
 $manifest = [ordered]@{
     run_name = $RunName
     source_dir = $SourceDir
     frame_count = $sourceFiles.Count
-    pair_count = $totalPairCount
+    stored_pair_count = $coveredPairs.Count
+    complete_sequence = $completeSequence
+    requested_pair_start = $StartPair
+    requested_pair_end = $EndPair
     max_stage_gib = $MaxStageGiB
     flow_dtype = $FlowDtype
     overlays_generated = $false

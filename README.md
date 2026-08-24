@@ -82,7 +82,7 @@ paneles RAFT/PIVlab y calcular correlaciones sobre la malla de PIVlab.
 preprocesamientos y localiza sus diferencias vectoriales.
 
 Para la secuencia completa, el controlador de Windows divide la transferencia
-en lotes reanudables de hasta 5 GiB, envía un job por lote y solo limpia las
+en lotes reanudables de hasta 1 GiB, envía un job por lote y solo limpia las
 copias de `swift` después de verificar la descarga:
 
 ```powershell

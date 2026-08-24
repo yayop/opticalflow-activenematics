@@ -90,7 +90,7 @@ repositorio:
 .\scripts\run_staged_full_sequence.ps1
 ```
 
-El controlador construye lotes con un máximo de 5 GiB y un frame solapado para
+El controlador construye por defecto lotes con un máximo de 1 GiB y un frame solapado para
 no perder el par situado en la frontera. Para cada lote:
 
 1. copia los frames desde `ACTNEM` a un staging local ignorado por Git;
@@ -105,6 +105,10 @@ La ejecución es reanudable: un lote local válido se vuelve a verificar y se
 omite. Ante un job fallido o una descarga corrupta, los artefactos remotos se
 conservan para diagnóstico. `-KeepRemoteArtifacts` desactiva toda limpieza
 remota intencionadamente.
+
+Aunque el tamaño se puede cambiar con `-MaxStageGiB`, no debe aumentarse a
+5 GiB con la cuota actual: la entrada y la salida densa coexisten hasta que el
+lote termina, y un lote de 5 GiB puede producir otros 8–9 GiB de campos.
 
 La configuración completa usa `float16` para almacenamiento, manteniendo la
 inferencia y las estadísticas en `float32`. En los 12 pares piloto, la

@@ -78,6 +78,8 @@ Para una secuencia numerada, el modelo se carga una sola vez y se reutiliza:
 El resultado incluye un NPZ y un overlay por par, además de `summary.csv` y
 `metadata.json`. `scripts/compare_raft_pivlab.py` permite después construir
 paneles RAFT/PIVlab y calcular correlaciones sobre la malla de PIVlab.
+`scripts/compare_preprocessing.py` compara campos obtenidos con dos
+preprocesamientos y localiza sus diferencias vectoriales.
 
 ## Estructura
 

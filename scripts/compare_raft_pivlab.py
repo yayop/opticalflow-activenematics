@@ -34,6 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pivlab", type=Path, required=True)
     parser.add_argument("--pivlab2", type=Path, required=True)
     parser.add_argument("--frames-dir", type=Path, required=True)
+    parser.add_argument("--frame-pattern", default="Frame_{index:04d}.tif")
     parser.add_argument("--raft-flows-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--pairs", type=parse_pair_spec, default=parse_pair_spec("1-12"))
@@ -114,7 +115,9 @@ def main() -> None:
     rows: list[dict[str, float | int | str]] = []
 
     for pair_index in args.pairs:
-        background = normalized_background(args.frames_dir / f"Frame_{pair_index:04d}.tif")
+        background = normalized_background(
+            args.frames_dir / args.frame_pattern.format(index=pair_index)
+        )
         flow = np.load(args.raft_flows_dir / f"flow_{pair_index:04d}_{pair_index + 1:04d}.npz")[
             "flow_px_per_frame"
         ]

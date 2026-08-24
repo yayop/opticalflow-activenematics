@@ -130,6 +130,61 @@ sintéticos, de muestra inmóvil y de escala de entrada.
   sobre `ImageSequence_divide_background_median`, y comparar crudo contra fondo
   dividido sin cambiar simultáneamente otras variables.
 
+## 2026-08-24 — Control con división por fondo mediano
+
+### Objetivo y datos
+
+- Se repitió el piloto sobre los frames 1–13 de
+  `ImageSequence_divide_background_median`, manteniendo los mismos 12 pares y
+  parámetros usados para la secuencia cruda.
+- Esta secuencia también tiene 7200 frames de 1120 × 1578 px, pero los TIFF son
+  `uint8` y usan el patrón `frame_####.tif`.
+- Los datos fuente en `ACTNEM` se conservaron sin modificaciones.
+
+### Corrida GPU
+
+- Commit ejecutado: `20b67bec654ed529eaec058187a6747e1dcb0481`.
+- Job Slurm `1035140`, `node5`, NVIDIA RTX A6000; estado `COMPLETED`, exit code
+  `0:0` y tiempo de pared 38 s.
+- Parámetros: 24 iteraciones, escala `upstream`, 0.5 s/frame y paso de flechas
+  24 px.
+- El procesamiento de los 12 pares tomó 24.98 s; la inferencia estabilizada fue
+  0.358–0.369 s/par y la memoria GPU máxima fue 5.89 GiB.
+
+### Comparación crudo vs. fondo dividido
+
+- Rapidez media de campo completo: 5.0327 px/frame para el crudo y 5.0245
+  px/frame para el fondo dividido. El cambio medio es −0.00825 px/frame
+  (−0.16 %).
+- La diferencia vectorial media es 0.2918 px/frame y su percentil 95 medio es
+  0.9977 px/frame. El coseno direccional medio es 0.9843.
+- Las correlaciones entre los campos son `corr(u)=0.9940` y `corr(v)=0.9960`.
+- Al excluir un borde de 64 px por lado, la diferencia vectorial media baja a
+  0.2259 px/frame y el coseno direccional sube a 0.9874. Los mapas muestran que
+  parte de la diferencia se concentra en los bordes y en estructuras delgadas
+  de alto contraste.
+
+### Comparación con PIVlab
+
+- Para el fondo dividido, el acuerdo promedio con PIVlab es
+  `corr(u)=0.9375`, `corr(v)=0.9448` y coseno direccional `0.9107`.
+- Con PIVlab2 es `corr(u)=0.8771`, `corr(v)=0.8936` y coseno direccional
+  `0.8669`.
+- Estas cifras son prácticamente iguales a las obtenidas con la secuencia
+  cruda. En esta muestra corta, la división por fondo mediano mejora el contraste
+  visual, pero no produce una mejora cuantitativa apreciable del acuerdo con
+  PIVlab ni cambia la rapidez media.
+
+### Decisión
+
+- El optical flow es robusto frente a este preprocesamiento en los 12 pares
+  examinados. No hay evidencia en este piloto para preferir el fondo dividido
+  por precisión del campo; sí puede ser útil para inspección visual o para
+  regiones afectadas por iluminación no uniforme.
+- Antes de decidir el preprocesamiento de la secuencia completa, conviene repetir
+  la comparación en varios puntos temporales, especialmente donde cambie la
+  iluminación media o el contraste.
+
 ## Plantilla para nuevas entradas
 
 ```text

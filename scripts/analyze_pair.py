@@ -6,6 +6,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -137,7 +138,10 @@ def save_outputs(
     flow_px_frame: np.ndarray,
     args: argparse.Namespace,
     device: torch.device,
+    timings_s: dict[str, float],
+    total_start: float,
 ) -> None:
+    output_start = time.perf_counter()
     output_dir.mkdir(parents=True, exist_ok=True)
     vx = flow_px_frame[..., 0]
     vy = flow_px_frame[..., 1]
@@ -183,6 +187,8 @@ def save_outputs(
     fig.savefig(output_dir / "velocity_overlay.png", dpi=180, bbox_inches="tight")
     plt.close(fig)
 
+    timings_s["output_generation_s"] = time.perf_counter() - output_start
+    timings_s["total_before_metadata_s"] = time.perf_counter() - total_start
     git_commit, git_dirty = git_provenance()
     metadata = {
         "image1": str(args.image1.resolve()),
@@ -196,6 +202,7 @@ def save_outputs(
         "torch": torch.__version__,
         "git_commit": git_commit,
         "git_dirty": git_dirty,
+        "timings_s": timings_s,
         "pixel_size_um": args.pixel_size_um,
         "delta_t_s": args.delta_t_s,
         "reported_units": units,
@@ -209,19 +216,31 @@ def save_outputs(
 
 
 def main() -> None:
+    total_start = time.perf_counter()
     args = parse_args()
     if args.iterations < 1 or args.grid_step < 1:
         raise ValueError("--iterations and --grid-step must be positive integers.")
     if args.pixel_size_um is not None and (args.pixel_size_um <= 0 or args.delta_t_s <= 0):
         raise ValueError("Spatial and temporal calibration values must be positive.")
 
+    timings_s: dict[str, float] = {}
     device = select_device(args.device)
+
+    stage_start = time.perf_counter()
     image1, background = load_image(args.image1, args.input_scale)
     image2, _ = load_image(args.image2, args.input_scale)
+    timings_s["image_loading_s"] = time.perf_counter() - stage_start
+
+    stage_start = time.perf_counter()
     model = load_model(args.model, device, args.mixed_precision)
+    timings_s["model_loading_s"] = time.perf_counter() - stage_start
+
+    stage_start = time.perf_counter()
     flow = infer_flow(model, image1, image2, device, args.iterations)
-    save_outputs(args.output_dir, background, flow, args, device)
+    timings_s["inference_s"] = time.perf_counter() - stage_start
+    save_outputs(args.output_dir, background, flow, args, device, timings_s, total_start)
     print(f"Results written to {args.output_dir.resolve()}")
+    print("Timings (s): " + json.dumps(timings_s, sort_keys=True))
 
 
 if __name__ == "__main__":

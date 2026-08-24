@@ -13,7 +13,8 @@ param(
     [string]$SshTarget = 'swift',
     [string]$RemoteProject = '/home/erosas/projects/opticalflow-activenematics',
     [switch]$PlanOnly,
-    [switch]$KeepRemoteArtifacts
+    [switch]$KeepRemoteArtifacts,
+    [switch]$RetryFailedJobs
 )
 
 $ErrorActionPreference = 'Stop'
@@ -224,10 +225,18 @@ foreach ($batch in $batches) {
         $jobId = [string]$jobRecord.job_id
         $recordedState = Get-SlurmJobState $jobId
         if ($recordedState -notin @('PENDING', 'RUNNING', 'CONFIGURING', 'COMPLETING', 'COMPLETED', '')) {
-            throw "Recorded job $jobId ended in state $recordedState. Remote artifacts were retained."
+            if (-not $RetryFailedJobs) {
+                throw "Recorded job $jobId ended in state $recordedState. Remote artifacts were retained. Use -RetryFailedJobs after diagnosis."
+            }
+            Write-Warning "Retrying failed job $jobId for $($batch.Name); retained batch artifacts will be replaced."
+            Remove-LocalStateFile $jobRecordPath $stagingRoot
+            $jobId = $null
         }
-        Write-Host "Resuming recorded Slurm job $jobId for $($batch.Name): $recordedState"
-    } else {
+        if ($jobId) {
+            Write-Host "Resuming recorded Slurm job $jobId for $($batch.Name): $recordedState"
+        }
+    }
+    if (-not $jobId) {
         Remove-LocalBatchDirectory $localStage $stagingRoot
         New-Item -ItemType Directory -Path $localStage | Out-Null
         Write-Host "Staging $($batch.Name) locally..."

@@ -16,7 +16,10 @@ set -euo pipefail
 : "${PAIR_END:?Set PAIR_END with sbatch --export}"
 
 PROJECT_DIR="${SLURM_SUBMIT_DIR:?Submit this job from the project root}"
-FRAME_PATTERN="${FRAME_PATTERN:-Frame_{index:04d}.tif}"
+FRAME_PATTERN="${FRAME_PATTERN:-}"
+if [[ -z "$FRAME_PATTERN" ]]; then
+  FRAME_PATTERN='Frame_{index:04d}.tif'
+fi
 FLOW_DTYPE="${FLOW_DTYPE:-float16}"
 OVERLAY_EVERY="${OVERLAY_EVERY:-0}"
 GRID_STEP="${GRID_STEP:-24}"
@@ -28,6 +31,7 @@ echo "job_id=${SLURM_JOB_ID}"
 echo "node=$(hostname)"
 echo "pairs=${PAIR_START}-${PAIR_END}"
 echo "flow_dtype=${FLOW_DTYPE}"
+echo "frame_pattern=${FRAME_PATTERN}"
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
 
 nix-shell shell.nix --run "

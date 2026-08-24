@@ -89,10 +89,21 @@ def select_device(requested: str) -> torch.device:
 
 def load_image(path: Path, input_scale: str) -> tuple[torch.Tensor, np.ndarray]:
     with Image.open(path) as image:
-        grayscale = np.asarray(image.convert("L"), dtype=np.float32)
-        rgb = np.asarray(image.convert("RGB"), dtype=np.float32)
-    if input_scale == "upstream":
-        rgb /= 255.0
+        raw = np.asarray(image)
+    if raw.ndim != 2:
+        raise ValueError(f"Expected a grayscale microscopy frame, got shape {raw.shape}: {path}")
+    if np.issubdtype(raw.dtype, np.integer):
+        grayscale = raw.astype(np.float32) / float(np.iinfo(raw.dtype).max)
+    elif np.issubdtype(raw.dtype, np.floating):
+        grayscale = raw.astype(np.float32)
+        if not np.isfinite(grayscale).all() or grayscale.min() < 0 or grayscale.max() > 1:
+            raise ValueError(f"Floating-point images must contain finite values in [0, 1]: {path}")
+    else:
+        raise ValueError(f"Unsupported image dtype {raw.dtype}: {path}")
+    grayscale = np.clip(grayscale, 0.0, 1.0)
+    rgb = np.repeat(grayscale[..., None], 3, axis=2)
+    if input_scale == "raft":
+        rgb *= 255.0
     tensor = torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0)
     return tensor, grayscale
 

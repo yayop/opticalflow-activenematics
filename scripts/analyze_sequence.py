@@ -46,6 +46,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--iterations", type=int, default=24)
     parser.add_argument("--grid-step", type=int, default=24)
     parser.add_argument("--quiver-scale", type=float, default=0.5)
+    parser.add_argument("--overlay-every", type=int, default=1)
+    parser.add_argument("--flow-dtype", choices=("float32", "float16"), default="float32")
     parser.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
     parser.add_argument("--mixed-precision", action="store_true")
     parser.add_argument("--input-scale", choices=("upstream", "raft"), default="upstream")
@@ -90,13 +92,22 @@ def save_overlay(
 
 def main() -> None:
     args = parse_args()
-    if args.delta_t_s <= 0 or args.iterations < 1 or args.grid_step < 1:
-        raise ValueError("Time interval, iterations and grid step must be positive.")
+    if (
+        args.delta_t_s <= 0
+        or args.iterations < 1
+        or args.grid_step < 1
+        or args.overlay_every < 0
+    ):
+        raise ValueError(
+            "Time interval, iterations and grid step must be positive; "
+            "overlay frequency must be non-negative."
+        )
 
     output_dir = args.output_dir.resolve()
     overlays_dir = output_dir / "overlays"
     flows_dir = output_dir / "flows"
-    overlays_dir.mkdir(parents=True, exist_ok=True)
+    if args.overlay_every:
+        overlays_dir.mkdir(parents=True, exist_ok=True)
     flows_dir.mkdir(parents=True, exist_ok=True)
 
     device = select_device(args.device)
@@ -123,16 +134,20 @@ def main() -> None:
 
         stem = f"flow_{pair_index:04d}_{pair_index + 1:04d}"
         output_start = time.perf_counter()
-        np.savez_compressed(flows_dir / f"{stem}.npz", flow_px_per_frame=flow)
-        save_overlay(
-            overlays_dir / f"{stem}.png",
-            background,
-            flow,
-            pair_index,
-            pair_index + 1,
-            args.grid_step,
-            args.quiver_scale,
+        stored_flow = flow.astype(args.flow_dtype, copy=False)
+        np.savez_compressed(
+            flows_dir / f"{stem}.npz", flow_px_per_frame=stored_flow
         )
+        if args.overlay_every and pair_index % args.overlay_every == 0:
+            save_overlay(
+                overlays_dir / f"{stem}.png",
+                background,
+                flow,
+                pair_index,
+                pair_index + 1,
+                args.grid_step,
+                args.quiver_scale,
+            )
         output_s = time.perf_counter() - output_start
         row = {
             "pair": stem,
@@ -164,6 +179,8 @@ def main() -> None:
         "input_scale": args.input_scale,
         "iterations": args.iterations,
         "grid_step": args.grid_step,
+        "overlay_every": args.overlay_every,
+        "flow_dtype": args.flow_dtype,
         "delta_t_s": args.delta_t_s,
         "model": str(args.model.resolve()),
         "device": str(device),

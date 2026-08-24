@@ -185,6 +185,43 @@ sintéticos, de muestra inmóvil y de escala de entrada.
   la comparación en varios puntos temporales, especialmente donde cambie la
   iluminación media o el contraste.
 
+## 2026-08-24 — Plan de campaña completa con staging
+
+### Restricciones observadas
+
+- La secuencia cruda ocupa 23.897 GiB y contiene 7200 frames, es decir, 7199
+  campos consecutivos.
+- En Windows quedan 75.23 GiB libres. Los campos densos comprimidos ocuparían
+  aproximadamente 86.8 GiB en `float32`, por lo que ese formato no cabe.
+- `swift` no expone el comando `quota`; el filesystem compartido informa 70 TiB
+  libres, pero se respeta la restricción de cuota indicada manteniendo solo un
+  lote temporal cada vez.
+
+### Diseño
+
+- Se planificaron cinco lotes de entrada: cuatro de 4.998 GiB y uno de 3.916
+  GiB. Los lotes comparten el frame de frontera para cubrir todos los pares una
+  sola vez.
+- El controlador `scripts/run_staged_full_sequence.ps1` sube, ejecuta, descarga,
+  verifica y limpia cada lote secuencialmente. Es reanudable y nunca elimina los
+  originales de `ACTNEM`.
+- La limpieza remota se limita a rutas descendientes de
+  `data/staged_full_sequences/<run>` y
+  `results/staged_full_sequences/<run>`, después de validar todos los NPZ
+  descargados.
+- Se eligió almacenamiento denso `float16`, estimado en 41–44 GiB, sin overlays
+  para todos los frames. Inferencia y estadísticas permanecen en `float32`.
+  Sobre los 12 campos piloto, la cuantización produjo un error absoluto máximo
+  de 0.0078 px/frame.
+
+### Validación pendiente
+
+- Evaluar una malla cuantitativa de 12 px para las correlaciones y compararla con
+  16, 24 y 48 px, teniendo en cuenta la autocorrelación espacial. Cambiar
+  `grid-step` por sí solo únicamente densifica las flechas y no los datos.
+- Antes de iniciar los 7199 pares se hará una prueba técnica corta del nuevo
+  formato, del verificador y del ciclo de limpieza.
+
 ## Plantilla para nuevas entradas
 
 ```text

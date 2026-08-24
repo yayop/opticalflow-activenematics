@@ -23,6 +23,12 @@ frames brutos → control de calidad → pareja t,t+Δt → RAFT
 Los archivos `flow.npz` contienen el campo completo. La imagen de flechas es una
 visualización submuestreada y no debe usarse como dato cuantitativo.
 
+`grid-step` solo controla el espaciado de las flechas de la figura. No cambia la
+resolución del campo RAFT guardado, que sigue teniendo un vector por píxel, ni
+añade observaciones independientes a una correlación. Para estudiar una malla
+de comparación de 12 px hay que muestrear explícitamente los campos sobre esa
+malla y considerar su autocorrelación espacial.
+
 ## Validación mínima antes de analizar una campaña
 
 1. **Reproducibilidad upstream.** Ejecutar los dos frames incluidos y comparar
@@ -38,6 +44,10 @@ visualización submuestreada y no debe usarse como dato cuantitativo.
 6. **Comparación física.** Usar trazadores, tracking o PIV en un subconjunto.
 7. **Sensibilidad temporal.** Repetir con separaciones de 1, 2, ... frames para
    localizar el rango donde el movimiento es resoluble sin perder asociación.
+8. **Malla estadística.** Comparar espaciados de 12, 16, 24 y 48 px, cuantificar
+   estabilidad de correlaciones y estimar el número efectivo de observaciones
+   considerando la longitud de correlación espacial. La malla de 12 px queda
+   registrada como validación pendiente; no debe confundirse con `grid-step`.
 
 ## Metadatos experimentales necesarios
 

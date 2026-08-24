@@ -68,7 +68,7 @@ Para una secuencia numerada, el modelo se carga una sola vez y se reutiliza:
 
 ```bash
 .venv/bin/python scripts/analyze_sequence.py \
-  --input-dir data/Bulk_1_12_11/raw_pilot_frames \
+  data/Bulk_1_12_11/raw_pilot_frames \
   --output-dir results/Bulk_1_12_11/raw_pilot \
   --pairs 1-12 \
   --delta-t-s 0.5 \
@@ -80,6 +80,19 @@ El resultado incluye un NPZ y un overlay por par, además de `summary.csv` y
 paneles RAFT/PIVlab y calcular correlaciones sobre la malla de PIVlab.
 `scripts/compare_preprocessing.py` compara campos obtenidos con dos
 preprocesamientos y localiza sus diferencias vectoriales.
+
+Para la secuencia completa, el controlador de Windows divide la transferencia
+en lotes reanudables de hasta 5 GiB, envía un job por lote y solo limpia las
+copias de `swift` después de verificar la descarga:
+
+```powershell
+.\scripts\run_staged_full_sequence.ps1 -PlanOnly
+.\scripts\run_staged_full_sequence.ps1
+```
+
+La campaña completa guarda los campos densos en `float16` y no genera 7199
+overlays. Las imágenes de inspección pueden producirse posteriormente para una
+selección temporal sin repetir la inferencia.
 
 ## Estructura
 

@@ -80,6 +80,38 @@ Para colecciones grandes es preferible `rsync` desde un sistema que lo tenga
 disponible o el almacenamiento compartido del laboratorio. Conserva siempre los
 datos brutos como solo lectura y escribe productos derivados en `results/`.
 
+## Campaña por lotes con cuota limitada
+
+Cuando las imágenes solo son accesibles desde Windows, ejecuta desde la raíz del
+repositorio:
+
+```powershell
+.\scripts\run_staged_full_sequence.ps1 -PlanOnly
+.\scripts\run_staged_full_sequence.ps1
+```
+
+El controlador construye lotes con un máximo de 5 GiB y un frame solapado para
+no perder el par situado en la frontera. Para cada lote:
+
+1. copia los frames desde `ACTNEM` a un staging local ignorado por Git;
+2. los transfiere a una ruta temporal y acotada de `swift`;
+3. envía `cluster/run_sequence_batch.slurm` y espera su estado final;
+4. descarga los campos, abre todos los NPZ y verifica rango, forma, tipo y
+   valores finitos;
+5. solo después de esa verificación elimina del clúster la entrada temporal y
+   la salida ya recuperada.
+
+La ejecución es reanudable: un lote local válido se vuelve a verificar y se
+omite. Ante un job fallido o una descarga corrupta, los artefactos remotos se
+conservan para diagnóstico. `-KeepRemoteArtifacts` desactiva toda limpieza
+remota intencionadamente.
+
+La configuración completa usa `float16` para almacenamiento, manteniendo la
+inferencia y las estadísticas en `float32`. En los 12 pares piloto, la
+cuantización tuvo un error absoluto máximo de 0.0078 px/frame. El campo denso
+completo se estima en aproximadamente 41–44 GiB; `float32` ocuparía unos 87 GiB
+y no cabe actualmente en el disco local disponible.
+
 ## Reproducibilidad
 
 Cada corrida debe conservar:

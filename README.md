@@ -1,52 +1,109 @@
-# Deep-learning Optical Flow Outperforms PIV in Obtaining Velocity Fields from Active Nematics
+# Optical flow para active nematics
 
-**Deep-learning Optical Flow Outperforms PIV in Obtaining Velocity Fields from Active Nematics**<br/>
-Phu N. Tran, Sattvic Ray, Linnea Lemma, Yunrui Li, Reef Sweeney, Aparna Baskaran, Zvonimir Dogic, Pengyu Hong, Michael F. Hagan
+Proyecto reproducible para estimar campos densos de desplazamiento y velocidad en
+secuencias de microscopía de nemáticos activos. Esta adaptación parte de
+[`tranngocphu/opticalflow-activenematics`](https://github.com/tranngocphu/opticalflow-activenematics),
+que aplica una arquitectura RAFT entrenada para este tipo de imágenes.
 
-Link to arXiv Paper: [**https://arxiv.org/abs/2404.15497**](https://arxiv.org/abs/2404.15497)
+> Estado: infraestructura inicial validada con el ejemplo de referencia en el
+> clúster `swift`. Consulta la [bitácora](docs/BITACORA.md).
 
-![teaser](datasets/experiment1/example_trajectory.png)
+## Qué produce
 
-## Abstract
-Deep learning-based optical flow (DLOF) extracts features in adjacent video frames with deep convolutional neural networks. It uses those features to estimate the inter-frame motions of objects at the pixel level. In this article, we evaluate the ability of optical flow to quantify the spontaneous flows of MT-based active nematics under different labeling conditions. We compare DLOF against the commonly used technique, particle imaging velocimetry (PIV). We obtain flow velocity ground truths either by performing semi-automated particle tracking on samples with sparsely labeled filaments, or from passive tracer beads. We find that DLOF produces significantly more accurate velocity fields than PIV for densely labeled samples. We show that the breakdown of PIV arises because the algorithm cannot reliably distinguish contrast variations at high densities, particularly in directions parallel to the nematic director. DLOF overcomes this limitation. For sparsely labeled samples, DLOF and PIV produce results with similar accuracy, but DLOF gives higher-resolution fields. Our work establishes DLOF as a versatile tool for measuring fluid flows in a broad class of active, soft, and biophysical systems.
+Para dos frames consecutivos, `scripts/analyze_pair.py` genera:
 
-## Requirements
-A CUDA-compatible GPU is required to run the code. A Python environment can be created using 
+- `flow.npz`: campo denso `(H, W, 2)`, componentes y módulo;
+- `velocity_overlay.png`: vectores superpuestos al primer frame;
+- `metadata.json`: parámetros, versiones, GPU y estadísticas básicas.
 
-```
-conda env create -f environment.yaml
-conda activate opticalflow
-```
-## Running a simple example
-```
-conda activate opticalflow
-cd /path/to/opticalflow
-python example/example.py
-```
-The above code takes two images in the directory ```./example/data``` as inputs to the model, and generate velocity plot at ```./example/velocity_plot.png```. The velocity field is plotted on the top of the first image.
+RAFT devuelve desplazamiento en **píxeles por frame**. Si se proporcionan el
+tamaño de píxel y el intervalo temporal, el script añade velocidad en µm/s:
 
-## Acnkowlegments
-This work largely adopted source code from the RAFT paper:
-```
-@misc{teed2020,
-      title={RAFT: Recurrent All-Pairs Field Transforms for Optical Flow}, 
-      author={Zachary Teed and Jia Deng},
-      year={2020},
-      eprint={2003.12039},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
-}
+```text
+velocidad [µm/s] = flujo [px/frame] × tamaño_de_píxel [µm/px] / Δt [s/frame]
 ```
 
-## BibTeX
-Consider to cite us and RAFT paper if you find the analysis in this work helpful.
+## Ejecución recomendada: clúster `swift`
+
+El proyecto se edita/documenta en Windows, pero la inferencia se ejecuta en
+Linux con GPU mediante Slurm y Nix.
+
+```bash
+ssh swift
+cd ~/projects/opticalflow-activenematics
+bash cluster/submit_example.sh
+squeue -u "$USER"
 ```
-@misc{tran2024,
-      title={Deep-learning Optical Flow Outperforms PIV in Obtaining Velocity Fields from Active Nematics}, 
-      author={Phu N. Tran and Sattvic Ray and Linnea Lemma and Yunrui Li and Reef Sweeney and Aparna Baskaran and Zvonimir Dogic and Pengyu Hong and Michael F. Hagan},
-      year={2024},
-      eprint={2404.15497},
-      archivePrefix={arXiv},
-      primaryClass={cond-mat.soft}
-}
+
+Cuando termine:
+
+```bash
+cat logs/example_<JOB_ID>.out
+cat logs/example_<JOB_ID>.err
+ls -lh results/example
 ```
+
+El job de ejemplo solicita la RTX A6000 de la partición `oldcpu`, 32 GB de RAM y
+30 minutos. Nix proporciona Python y `virtualenv`; `cluster/setup_env.sh` crea
+`.venv` e instala las versiones fijadas en `requirements-cluster.txt`. La primera
+ejecución tarda mientras descarga el wheel CUDA de PyTorch; las siguientes
+reutilizan el entorno.
+
+Para una pareja propia:
+
+```bash
+nix-shell shell.nix --run "bash cluster/setup_env.sh"
+.venv/bin/python scripts/analyze_pair.py \
+  data/raw/frame_000.tif data/raw/frame_001.tif \
+  --output-dir results/experimento_01/pair_000_001 \
+  --pixel-size-um 0.108 \
+  --delta-t-s 2.0 \
+  --device cuda
+```
+
+Sustituye `0.108` y `2.0` por la calibración real del microscopio y la adquisición.
+
+## Estructura
+
+```text
+cluster/                 Jobs y envío a Slurm
+docs/                    Método, guía del clúster y bitácora
+example/                 Dos frames y resultado originales de referencia
+models/weights.pth       Pesos publicados por el proyecto original
+RAFT/                    Implementación RAFT incluida por el proyecto original
+scripts/analyze_pair.py  Interfaz reproducible para una pareja de frames
+shell.nix                Entorno Linux/Nix con PyTorch CUDA
+data/                    Datos propios locales (ignorados por Git)
+results/                 Resultados generados (ignorados por Git)
+logs/                    Salidas de Slurm (ignoradas por Git)
+```
+
+## Decisiones que deben validarse científicamente
+
+1. `--input-scale upstream` reproduce el preprocesamiento publicado: el tensor
+   entra en el intervalo 0–1 aunque la implementación RAFT vuelve a dividir por
+   255. Es una convención inusual y debe compararse contra `--input-scale raft`
+   antes de cambiarla.
+2. El flujo es movimiento aparente de intensidad, no una medida física de
+   velocidad hasta aplicar la calibración espacial y temporal.
+3. La dirección vertical sigue coordenadas de imagen: `+y` apunta hacia abajo.
+4. Deben evaluarse sensibilidad a `--iterations`, densidad de marcado,
+   fotoblanqueo, deriva global, ruido y distancia temporal entre frames.
+5. Imágenes grandes pueden requerir recorte o inferencia por teselas debido al
+   coste cuadrático del volumen de correlación de RAFT.
+
+Más detalle en [Método y validación](docs/METODO_Y_VALIDACION.md) y
+[Uso de `swift`](docs/CLUSTER_SWIFT.md).
+
+## Procedencia, citas y licencia
+
+La base de código, los pesos y los datos de ejemplo proceden del repositorio de
+Phu N. Tran y colaboradores. Si utilizas este trabajo, cita tanto su artículo
+([arXiv:2404.15497](https://arxiv.org/abs/2404.15497)) como RAFT
+([arXiv:2003.12039](https://arxiv.org/abs/2003.12039)).
+
+El repositorio upstream no publica un archivo de licencia. Por tanto, no se
+presupone permiso para relicenciar o redistribuir su código y pesos fuera de los
+términos aplicables de GitHub. Esta adaptación debe publicarse como fork con
+atribución clara, o separando el código propio del upstream, hasta que los
+autores aclaren la licencia.

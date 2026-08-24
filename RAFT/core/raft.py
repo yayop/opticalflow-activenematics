@@ -1,5 +1,3 @@
-import imageio
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -41,10 +39,10 @@ class RAFT(nn.Module):
             args.corr_levels = 4
             args.corr_radius = 4
 
-        if 'dropout' not in self.args:
+        if not hasattr(self.args, 'dropout'):
             self.args.dropout = 0
 
-        if 'alternate_corr' not in self.args:
+        if not hasattr(self.args, 'alternate_corr'):
             self.args.alternate_corr = False
 
         # feature network, context network, and update block

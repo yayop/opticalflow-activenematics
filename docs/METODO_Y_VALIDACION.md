@@ -1,0 +1,62 @@
+# Método y plan de validación
+
+## Qué hace RAFT
+
+RAFT extrae características de dos imágenes, construye un volumen de correlación
+entre ellas y refina iterativamente un campo denso de desplazamientos. Cada píxel
+recibe dos componentes:
+
+- `vx`: desplazamiento horizontal, positivo hacia la derecha;
+- `vy`: desplazamiento vertical, positivo hacia abajo en coordenadas de imagen.
+
+El modelo del repositorio upstream fue aplicado a microscopía de nemáticos
+activos y comparado con PIV. Eso no elimina la necesidad de validarlo con la
+óptica, marcado, exposición y cadencia de nuestro experimento.
+
+## Pipeline inicial
+
+```text
+frames brutos → control de calidad → pareja t,t+Δt → RAFT
+             → flujo px/frame → calibración µm/s → visualización + métricas
+```
+
+Los archivos `flow.npz` contienen el campo completo. La imagen de flechas es una
+visualización submuestreada y no debe usarse como dato cuantitativo.
+
+## Validación mínima antes de analizar una campaña
+
+1. **Reproducibilidad upstream.** Ejecutar los dos frames incluidos y comparar
+   el resultado con `example/velocity_plot.png`.
+2. **Escala de entrada.** Comparar `--input-scale upstream` y `raft`. Mantener la
+   variante publicada como referencia hasta tener una métrica independiente.
+3. **Desplazamiento sintético.** Trasladar una imagen una cantidad conocida y
+   medir sesgo, error absoluto y dispersión lejos de los bordes.
+4. **Control inmóvil.** Analizar frames repetidos o una muestra pasiva para
+   estimar el suelo de ruido.
+5. **Deriva global.** Medir si hay traslación de cámara/muestra y decidir si se
+   resta antes de interpretar flujos internos.
+6. **Comparación física.** Usar trazadores, tracking o PIV en un subconjunto.
+7. **Sensibilidad temporal.** Repetir con separaciones de 1, 2, ... frames para
+   localizar el rango donde el movimiento es resoluble sin perder asociación.
+
+## Metadatos experimentales necesarios
+
+- tamaño de píxel efectivo en µm/px;
+- tiempo real entre frames en segundos;
+- aumento, objetivo y cámara;
+- canal, exposición, binning y bit depth;
+- fecha, muestra y condición experimental;
+- preprocesamiento (flat field, background, denoise, registro, recorte);
+- orientación física de los ejes de la imagen.
+
+## Riesgos conocidos
+
+- La conservación de intensidad puede fallar con fotoblanqueo o fluctuaciones
+  del marcador.
+- El flujo óptico sigue textura/intensidad y no necesariamente filamentos
+  individuales.
+- Bordes, regiones saturadas y bajo contraste suelen producir estimaciones menos
+  fiables.
+- El volumen de correlación estándar de RAFT crece rápidamente con el área de la
+  imagen; hay que registrar cualquier estrategia de teselado y solapamiento.
+- Convertir a µm/s no corrige por sí solo deriva, perspectiva o deformaciones.

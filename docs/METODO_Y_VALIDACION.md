@@ -29,6 +29,33 @@ añade observaciones independientes a una correlación. Para estudiar una malla
 de comparación de 12 px hay que muestrear explícitamente los campos sobre esa
 malla y considerar su autocorrelación espacial.
 
+## Vorticidad sobre la malla de 12 px
+
+Para un flujo `u=dx/dframe`, `v=dy/dframe` en coordenadas de imagen (`+x` a la
+derecha, `+y` hacia abajo), se guarda
+
+```text
+omega_image = dv/dx - du/dy
+```
+
+Las derivadas usan el espaciado físico de la malla, `dx=dy=12 px`, no un paso
+unitario entre índices. Por ello `omega_image` tiene unidades `1/frame`. Con la
+cadencia registrada de `delta_t=0.5 s`, `omega_image / 0.5` tiene unidades
+`1/s`. Si se transforma a coordenadas cartesianas con `+y` hacia arriba, la
+vorticidad cambia de signo: `omega_cartesian = -omega_image`.
+
+Se usan diferencias centradas de segundo orden en el interior y diferencias
+unilaterales de segundo orden en el borde (`numpy.gradient`, `edge_order=2`).
+El producto canónico se guarda en `float32` bajo la clave
+`vorticity_image_per_frame`; la conversión temporal se conserva en los
+metadatos y en el resumen, evitando duplicar el mismo campo escalado.
+
+Cuando haya una inclusión, la máscara puede excluirla de estadísticas y
+visualizaciones. Además debe excluirse o dilatarse una franja alrededor de su
+borde: una derivada que cruza desde fluido válido hacia una región enmascarada
+no representa la vorticidad del fluido. La campaña actual calcula primero el
+campo geométrico completo y no aplica una máscara implícita.
+
 ## Validación mínima antes de analizar una campaña
 
 1. **Reproducibilidad upstream.** Ejecutar los dos frames incluidos y comparar

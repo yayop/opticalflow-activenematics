@@ -279,6 +279,31 @@ sintéticos, de muestra inmóvil y de escala de entrada.
   aproximadamente 0.7–1.0 GiB de campos en total, frente a decenas de GiB si se
   conservaran densos.
 
+## 2026-08-25 — Vorticidad local paralela
+
+### Diseño
+
+- Los seis resultados completos contienen 24098 campos sobre una malla de
+  12 px. La derivada no necesita GPU, por lo que se decidió calcularla en la
+  estación Windows: 24 núcleos físicos, 48 procesadores lógicos y 68.3 GiB de
+  RAM, con lectura y escritura directas en `ACTNEM`.
+- `scripts/calculate_vorticity_local.py` usa 48 procesos independientes y
+  calcula `omega_image = dv/dx - du/dy` con el espaciado correcto de 12 px.
+  La salida canónica está en `1/frame`; los resúmenes incluyen también `1/s`
+  usando `delta_t=0.5 s`.
+- Cada campo se escribe de forma atómica dentro de `batch_*/vorticity/`. El
+  marcador `_VORTICITY_COMPLETE.json` solo aparece al terminar y verificar el
+  lote, por lo que una interrupción se puede reanudar. Los campos de velocidad
+  originales se conservan sin cambios.
+
+### Validación
+
+- Una rotación rígida sintética con vorticidad exacta `0.15/frame` dio un error
+  absoluto máximo de `2.38e-7/frame`.
+- La prueba integral sobre los 12 campos reales del piloto produjo 12 NPZ
+  `float32` finitos de forma 132 × 94, el CSV de estadísticas y los metadatos.
+  Una segunda ejecución omitió correctamente el lote ya verificado.
+
 ## Plantilla para nuevas entradas
 
 ```text

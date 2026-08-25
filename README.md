@@ -107,6 +107,20 @@ Cada raíz recibe una carpeta hermana de `ImageSequence` llamada
 `OpticalFlow_RAFT_grid12`. La ejecución es reanudable por lotes y Windows no
 almacena las nuevas campañas.
 
+La vorticidad de todos los campos ya almacenados se calcula localmente, sin
+GPU, leyendo y escribiendo directamente en el NAS:
+
+```powershell
+python .\scripts\calculate_vorticity_local.py --self-test
+python .\scripts\calculate_vorticity_local.py --workers 48
+```
+
+El segundo comando usa los 48 procesadores lógicos disponibles y puede
+reiniciarse sin repetir lotes verificados. En cada `batch_*` crea
+`vorticity/vorticity_####_####.npz`, `vorticity_summary.csv`, metadatos y el
+marcador `_VORTICITY_COMPLETE.json`; los NPZ de velocidad originales no se
+modifican.
+
 ## Estructura
 
 ```text

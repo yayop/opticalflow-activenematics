@@ -131,7 +131,9 @@ while (( pair_start <= last_pair )); do
 done
 
 manifest="$STATE_ROOT/campaign_manifest.json"
-python - "$manifest" "$DATASET_NAME" "$NAS_SEQUENCE" "$NAS_RESULT" "$FRAME_COUNT" "$FRAME_HEIGHT" "$FRAME_WIDTH" <<'PY'
+nix-shell shell.nix --run \
+  ".venv/bin/python - '$manifest' '$DATASET_NAME' '$NAS_SEQUENCE' '$NAS_RESULT' \
+    '$FRAME_COUNT' '$FRAME_HEIGHT' '$FRAME_WIDTH'" <<'PY'
 import json, pathlib, sys
 output, name, source, result, frames, height, width = sys.argv[1:]
 root = pathlib.Path(output).parent

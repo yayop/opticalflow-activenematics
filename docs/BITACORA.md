@@ -239,6 +239,46 @@ sintéticos, de muestra inmóvil y de escala de entrada.
   4516–7199 quedan nueve lotes de 0.946–0.999 GiB, con un pico remoto previsto
   muy inferior.
 
+## 2026-08-25 — Campaña multiexperimento en NAS, malla 12 px
+
+### Inventario
+
+- `bulk2`: 7200 frames, 1486 × 1064 px.
+- `20241106_BULK001`: 2168 frames, 1486 × 1064 px.
+- `20241108_BULK`: 2734 frames, 1486 × 1064 px.
+- `20250227`: 1802 frames, 1486 × 1064 px.
+- `BULK`: 3000 frames, 1486 × 1064 px.
+- `Bulk_1_12_11`: 7200 frames, 1578 × 1120 px; sus 7199 campos densos ya
+  estaban completos y verificados.
+
+### Decisión de resolución
+
+- El cálculo anterior no tiene resolución 24: está guardado densamente, con un
+  vector por píxel. `grid-step=24` controlaba únicamente los overlays.
+- Para homogeneizar las correlaciones se define una malla cuantitativa de 12 px
+  con origen `(0,0)`. Las cinco campañas nuevas calculan RAFT a resolución
+  completa y almacenan `flow[::12,::12]` en `float16`.
+- `Bulk_1_12_11` se deriva desde el campo denso existente sin repetir la
+  inferencia. La prueba de 12 campos produjo forma 132 × 94 × 2 y 0.52 MiB.
+
+### Flujo directo con el NAS
+
+- `swift` accede a `ACTNEM` por SSH/rsync; el NAS dispone de 19 TiB libres.
+- Cada resultado se escribe junto a su `ImageSequence`, en
+  `OpticalFlow_RAFT_grid12`.
+- La entrada viaja NAS→swift por lotes de hasta aproximadamente 5 GiB. La salida
+  se verifica localmente, se transfiere con checksum y solo entonces se crea
+  `_COMPLETE.json` y se limpia el staging del clúster.
+- La prueba integral `bulk2_smoke`, job `1040215`, produjo 12 campos de
+  124 × 89 × 2, 0.47 MiB, completó la verificación checksum y demostró que el
+  controlador reconoce lotes terminados sin recalcularlos.
+
+### Volumen esperado
+
+- Las cinco campañas nuevas suman 16899 pares. A partir de la prueba se estima
+  aproximadamente 0.7–1.0 GiB de campos en total, frente a decenas de GiB si se
+  conservaran densos.
+
 ## Plantilla para nuevas entradas
 
 ```text

@@ -90,9 +90,22 @@ copias de `swift` después de verificar la descarga:
 .\scripts\run_staged_full_sequence.ps1
 ```
 
-La campaña completa guarda los campos densos en `float16` y no genera 7199
+La primera campaña completa guarda los campos densos en `float16` y no genera 7199
 overlays. Las imágenes de inspección pueden producirse posteriormente para una
 selección temporal sin repetir la inferencia.
+
+Para campañas múltiples se usa una malla cuantitativa de 12 px. `swift` copia
+la entrada directamente desde `ACTNEM`, ejecuta RAFT a resolución completa,
+guarda `flow[::12, ::12]` y sincroniza los resultados verificados al NAS:
+
+```powershell
+.\scripts\run_all_bulk_grid12.ps1 -PlanOnly
+.\scripts\run_all_bulk_grid12.ps1
+```
+
+Cada raíz recibe una carpeta hermana de `ImageSequence` llamada
+`OpticalFlow_RAFT_grid12`. La ejecución es reanudable por lotes y Windows no
+almacena las nuevas campañas.
 
 ## Estructura
 

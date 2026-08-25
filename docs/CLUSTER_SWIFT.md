@@ -116,6 +116,27 @@ cuantización tuvo un error absoluto máximo de 0.0078 px/frame. El campo denso
 completo se estima en aproximadamente 41–44 GiB; `float32` ocuparía unos 87 GiB
 y no cabe actualmente en el disco local disponible.
 
+## Campañas NAS en malla de 12 px
+
+`swift` accede al NAS mediante el alias SSH `ACTNEM`. No está montado como
+filesystem en los nodos. `cluster/run_nas_grid12_campaign.sh` implementa:
+
+```text
+NAS/ImageSequence → rsync a staging de swift → Slurm/RAFT
+                  → verificación local → rsync --checksum al NAS
+                  → marcador _COMPLETE.json → limpieza del staging
+```
+
+Los resultados se guardan directamente como
+`<raíz>/OpticalFlow_RAFT_grid12`. Un lote remoto solo se considera terminado
+cuando existe `_COMPLETE.json`, creado después de una segunda comparación con
+checksum. Si el controlador se reinicia, omite esos lotes.
+
+La inferencia permanece a resolución completa. Solo el almacenamiento se
+submuestrea cada 12 px, con origen `(x,y)=(0,0)` y coordenadas deducibles como
+`x=0,12,24,...` y `y=0,12,24,...`. Los metadatos registran forma completa,
+forma guardada, origen, paso y tipo `float16`.
+
 ## Reproducibilidad
 
 Cada corrida debe conservar:

@@ -106,10 +106,11 @@ while (( pair_start <= last_pair )); do
   printf '%s\n' "$job_id" > "$state_dir/job_id.txt"
   wait_for_job "$job_id"
 
-  .venv/bin/python scripts/verify_sequence_batch.py "$local_output" \
-    --pair-start "$pair_start" --pair-end "$pair_end" \
-    --dtype float16 --height "$FRAME_HEIGHT" --width "$FRAME_WIDTH" \
-    --storage-grid-step 12
+  nix-shell shell.nix --run \
+    ".venv/bin/python scripts/verify_sequence_batch.py '$local_output' \
+      --pair-start '$pair_start' --pair-end '$pair_end' \
+      --dtype float16 --height '$FRAME_HEIGHT' --width '$FRAME_WIDTH' \
+      --storage-grid-step 12"
   cp "$local_output/verification.json" "$state_dir/verification.json"
   cp "$local_output/summary.csv" "$state_dir/summary.csv"
 

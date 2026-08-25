@@ -23,6 +23,7 @@ fi
 FLOW_DTYPE="${FLOW_DTYPE:-float16}"
 OVERLAY_EVERY="${OVERLAY_EVERY:-0}"
 GRID_STEP="${GRID_STEP:-24}"
+STORAGE_GRID_STEP="${STORAGE_GRID_STEP:-1}"
 
 cd "$PROJECT_DIR"
 mkdir -p logs "$OUTPUT_DIR"
@@ -32,6 +33,7 @@ echo "node=$(hostname)"
 echo "pairs=${PAIR_START}-${PAIR_END}"
 echo "flow_dtype=${FLOW_DTYPE}"
 echo "frame_pattern=${FRAME_PATTERN}"
+echo "storage_grid_step=${STORAGE_GRID_STEP}"
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
 
 nix-shell shell.nix --run "
@@ -44,6 +46,7 @@ nix-shell shell.nix --run "
     --delta-t-s 0.5 \
     --device cuda \
     --flow-dtype '$FLOW_DTYPE' \
+    --storage-grid-step '$STORAGE_GRID_STEP' \
     --overlay-every '$OVERLAY_EVERY' \
     --grid-step '$GRID_STEP'
 "

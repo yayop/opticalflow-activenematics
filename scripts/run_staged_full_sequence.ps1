@@ -3,12 +3,14 @@ param(
     [string]$SourceDir = '\\ACTNEM\homes\Edgardo Rosas\Bulk Active Nematics Videos\Bulk_1_12_11\ImageSequence',
     [string]$FrameTemplate = 'Frame_{0:D4}.tif',
     [string]$PythonFramePattern = 'Frame_{index:04d}.tif',
-    [string]$RunName = 'raw_full_dense_f16',
+    [string]$RunName = 'raw_full_grid12_f16',
+    [string]$LocalResultParent = 'results\all_bulk_grid12',
     [int]$ExpectedFrameCount = 7200,
     [int]$StartPair = 1,
     [int]$EndPair = 7199,
     [int]$FrameHeight = 1578,
     [int]$FrameWidth = 1120,
+    [int]$StorageGridStep = 12,
     [double]$MaxStageGiB = 1.0,
     [ValidateSet('float16', 'float32')]
     [string]$FlowDtype = 'float16',
@@ -22,7 +24,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $stagingRoot = Join-Path $repoRoot ".staging\$RunName"
-$destinationRoot = Join-Path $repoRoot "results\Bulk_1_12_11\$RunName"
+$resultParent = if ([IO.Path]::IsPathRooted($LocalResultParent)) {
+    $LocalResultParent
+} else {
+    Join-Path $repoRoot $LocalResultParent
+}
+$destinationRoot = Join-Path $resultParent $RunName
 $remoteInputRoot = "$RemoteProject/data/staged_full_sequences/$RunName"
 $remoteOutputRoot = "$RemoteProject/results/staged_full_sequences/$RunName"
 
@@ -105,7 +112,8 @@ function Test-DownloadedBatch {
         --pair-end $PairEnd `
         --dtype $FlowDtype `
         --height $FrameHeight `
-        --width $FrameWidth
+        --width $FrameWidth `
+        --storage-grid-step $StorageGridStep
     return $LASTEXITCODE -eq 0
 }
 
@@ -130,6 +138,9 @@ if (-not (Test-Path -LiteralPath $SourceDir -PathType Container)) {
 }
 if ($MaxStageGiB -le 0) {
     throw 'MaxStageGiB must be positive.'
+}
+if ($StorageGridStep -lt 1) {
+    throw 'StorageGridStep must be positive.'
 }
 
 $sourceFiles = @(Get-ChildItem -LiteralPath $SourceDir -File -Filter '*.tif' | Sort-Object Name)
@@ -178,7 +189,10 @@ while ($frameStart -lt $lastFrame) {
     $frameStart = $frameEnd
 }
 
-$estimatedMiBPerPair = if ($FlowDtype -eq 'float16') { 6.2 } else { 13.0 }
+$bytesPerValue = if ($FlowDtype -eq 'float16') { 2 } else { 4 }
+$storedHeight = [math]::Ceiling($FrameHeight / $StorageGridStep)
+$storedWidth = [math]::Ceiling($FrameWidth / $StorageGridStep)
+$estimatedMiBPerPair = 1.15 * $storedHeight * $storedWidth * 2 * $bytesPerValue / 1MB
 $totalPairCount = $EndPair - $StartPair + 1
 $verifiedPairs = 0
 foreach ($batch in $batches) {
@@ -187,6 +201,7 @@ foreach ($batch in $batches) {
         try {
             $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
             if ($report.verified -and $report.dtype -eq $FlowDtype -and
+                $report.storage_grid_step_px -eq $StorageGridStep -and
                 $report.pair_start -eq $batch.PairStart -and
                 $report.pair_end -eq $batch.PairEnd) {
                 $verifiedPairs += 1 + $batch.PairEnd - $batch.PairStart
@@ -270,9 +285,9 @@ foreach ($batch in $batches) {
         Write-Host "Uploading $($batch.Name)..."
         Invoke-Checked scp @('-r', $localStage, "${SshTarget}:$remoteInputRoot/")
 
-        $export = 'ALL,INPUT_DIR={0},OUTPUT_DIR={1},PAIR_START={2},PAIR_END={3},FRAME_PATTERN={4},FLOW_DTYPE={5},OVERLAY_EVERY=0,GRID_STEP=24' -f `
+        $export = 'ALL,INPUT_DIR={0},OUTPUT_DIR={1},PAIR_START={2},PAIR_END={3},FRAME_PATTERN={4},FLOW_DTYPE={5},OVERLAY_EVERY=0,GRID_STEP=24,STORAGE_GRID_STEP={6}' -f `
             $remoteBatchInput, $remoteBatchOutput, $batch.PairStart, $batch.PairEnd, `
-            $PythonFramePattern, $FlowDtype
+            $PythonFramePattern, $FlowDtype, $StorageGridStep
         $jobName = 'of_{0:D4}_{1:D4}' -f $batch.PairStart, $batch.PairEnd
         $jobId = Invoke-SshText "cd '$RemoteProject' && sbatch --parsable --job-name='$jobName' --export='$export' cluster/run_sequence_batch.slurm"
         if ($jobId -notmatch '^\d+$') {
@@ -339,6 +354,8 @@ $manifest = [ordered]@{
     requested_pair_end = $EndPair
     max_stage_gib = $MaxStageGiB
     flow_dtype = $FlowDtype
+    storage_grid_step_px = $StorageGridStep
+    storage_grid_origin_xy_px = @(0, 0)
     overlays_generated = $false
     batches = $verificationReports
 }

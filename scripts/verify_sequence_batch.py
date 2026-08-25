@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dtype", choices=("float16", "float32"), required=True)
     parser.add_argument("--height", type=int, required=True)
     parser.add_argument("--width", type=int, required=True)
+    parser.add_argument("--storage-grid-step", type=int, default=1)
     return parser.parse_args()
 
 
@@ -28,6 +30,11 @@ def main() -> None:
     failures: list[str] = []
     total_bytes = 0
     flow_count = 0
+    expected_shape = (
+        math.ceil(args.height / args.storage_grid_step),
+        math.ceil(args.width / args.storage_grid_step),
+        2,
+    )
 
     for pair_index in expected_pairs:
         path = flows_dir / f"flow_{pair_index:04d}_{pair_index + 1:04d}.npz"
@@ -38,7 +45,7 @@ def main() -> None:
         try:
             with np.load(path) as data:
                 flow = data["flow_px_per_frame"]
-                if flow.shape != (args.height, args.width, 2):
+                if flow.shape != expected_shape:
                     failures.append(f"shape {flow.shape}: {path.name}")
                 if flow.dtype != np.dtype(args.dtype):
                     failures.append(f"dtype {flow.dtype}: {path.name}")
@@ -65,6 +72,8 @@ def main() -> None:
             failures.append("metadata pair range does not match")
         if metadata.get("flow_dtype") != args.dtype:
             failures.append("metadata dtype does not match")
+        if metadata.get("storage_grid_step_px", 1) != args.storage_grid_step:
+            failures.append("metadata storage grid step does not match")
 
     report = {
         "verified": not failures,
@@ -73,7 +82,9 @@ def main() -> None:
         "flow_count": flow_count,
         "flow_bytes": total_bytes,
         "dtype": args.dtype,
-        "shape": [args.height, args.width, 2],
+        "shape": list(expected_shape),
+        "full_image_shape": [args.height, args.width],
+        "storage_grid_step_px": args.storage_grid_step,
         "failures": failures,
     }
     print(json.dumps(report, indent=2))

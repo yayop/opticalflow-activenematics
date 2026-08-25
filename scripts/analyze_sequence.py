@@ -48,6 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quiver-scale", type=float, default=0.5)
     parser.add_argument("--overlay-every", type=int, default=1)
     parser.add_argument("--flow-dtype", choices=("float32", "float16"), default="float32")
+    parser.add_argument("--storage-grid-step", type=int, default=1)
     parser.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
     parser.add_argument("--mixed-precision", action="store_true")
     parser.add_argument("--input-scale", choices=("upstream", "raft"), default="upstream")
@@ -96,6 +97,7 @@ def main() -> None:
         args.delta_t_s <= 0
         or args.iterations < 1
         or args.grid_step < 1
+        or args.storage_grid_step < 1
         or args.overlay_every < 0
     ):
         raise ValueError(
@@ -134,7 +136,9 @@ def main() -> None:
 
         stem = f"flow_{pair_index:04d}_{pair_index + 1:04d}"
         output_start = time.perf_counter()
-        stored_flow = flow.astype(args.flow_dtype, copy=False)
+        stored_flow = flow[:: args.storage_grid_step, :: args.storage_grid_step].astype(
+            args.flow_dtype, copy=False
+        )
         np.savez_compressed(
             flows_dir / f"{stem}.npz", flow_px_per_frame=stored_flow
         )
@@ -176,6 +180,9 @@ def main() -> None:
         "pairs": args.pairs,
         "pattern": args.pattern,
         "image_shape": list(flow.shape),
+        "stored_flow_shape": list(stored_flow.shape),
+        "storage_grid_step_px": args.storage_grid_step,
+        "storage_grid_origin_xy_px": [0, 0],
         "input_scale": args.input_scale,
         "iterations": args.iterations,
         "grid_step": args.grid_step,
